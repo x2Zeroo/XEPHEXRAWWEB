@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="th">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Lua Raw Host — ฝากไฟล์ Roblox แบบมีระบบป้องกัน</title>
+    <meta
+      name="description"
+      content="ฝากไฟล์ Raw Lua สำหรับ Roblox เปิดจากเบราว์เซอร์เห็น decoy แต่ Executor เห็นไฟล์จริง"
+    />
+    <style>
+      :root {
+        --bg: #0b0d10;
+        --panel: #14181d;
+        --panel-2: #1b2129;
+        --line: #262d36;
+        --text: #e7ecf2;
+        --muted: #8b96a5;
+        --accent: #ff4d4d;
+        --accent-2: #22c55e;
+        --radius: 14px;
+      }
+      * { box-sizing: border-box; }
+      html { background: var(--bg); }
+      body {
+        margin: 0;
+        font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+        background: radial-gradient(1200px 600px at 80% -10%, #1a1f27 0%, var(--bg) 60%);
+        color: var(--text);
+        min-height: 100vh;
+        line-height: 1.5;
+      }
+      .wrap { max-width: 860px; margin: 0 auto; padding: 40px 20px 80px; }
+      header { display: flex; align-items: center; gap: 14px; margin-bottom: 8px; }
+      .logo {
+        width: 44px; height: 44px; border-radius: 12px;
+        background: linear-gradient(135deg, var(--accent), #b91c1c);
+        display: grid; place-items: center; font-weight: 800; color: #fff; font-size: 20px;
+        box-shadow: 0 8px 24px rgba(255, 77, 77, 0.28);
+      }
+      h1 { font-size: 22px; margin: 0; letter-spacing: -0.02em; }
+      .sub { color: var(--muted); font-size: 14px; margin: 2px 0 0; }
+
+      .card {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        padding: 22px;
+        margin-top: 24px;
+      }
+      label { display: block; font-size: 13px; color: var(--muted); margin: 0 0 6px; font-weight: 600; }
+      .row { margin-bottom: 18px; }
+      input, textarea {
+        width: 100%;
+        background: var(--panel-2);
+        border: 1px solid var(--line);
+        color: var(--text);
+        border-radius: 10px;
+        padding: 12px 14px;
+        font-size: 14px;
+        font-family: inherit;
+        outline: none;
+        transition: border-color 0.15s;
+      }
+      input:focus, textarea:focus { border-color: var(--accent); }
+      textarea {
+        resize: vertical;
+        min-height: 150px;
+        font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+        font-size: 13px;
+        line-height: 1.55;
+      }
+      .hint { font-size: 12px; color: var(--muted); margin-top: 6px; }
+      .grid2 { display: grid; grid-template-columns: 1fr; gap: 18px; }
+      @media (min-width: 640px) { .grid2 { grid-template-columns: 1fr 1fr; } }
+
+      button {
+        appearance: none; border: 0; cursor: pointer;
+        background: var(--accent); color: #fff;
+        font-weight: 700; font-size: 15px;
+        padding: 13px 20px; border-radius: 10px; width: 100%;
+        transition: filter 0.15s, transform 0.05s;
+      }
+      button:hover { filter: brightness(1.08); }
+      button:active { transform: translateY(1px); }
+      button:disabled { opacity: 0.55; cursor: not-allowed; }
+
+      .result { margin-top: 18px; display: none; }
+      .result.show { display: block; }
+      .out-row {
+        display: flex; gap: 8px; align-items: stretch; margin-top: 8px;
+      }
+      .out-row code {
+        flex: 1; background: var(--panel-2); border: 1px solid var(--line);
+        border-radius: 10px; padding: 12px 14px; font-family: ui-monospace, monospace;
+        font-size: 13px; color: var(--accent-2); overflow-x: auto; white-space: nowrap;
+      }
+      .copy {
+        width: auto; padding: 0 16px; background: var(--panel-2);
+        border: 1px solid var(--line); color: var(--text); font-size: 13px;
+      }
+      .copy:hover { filter: none; border-color: var(--accent); }
+      .msg { font-size: 13px; margin-top: 10px; }
+      .msg.err { color: var(--accent); }
+      .msg.ok { color: var(--accent-2); }
+
+      .info {
+        border: 1px dashed var(--line); border-radius: 12px; padding: 14px 16px;
+        margin-top: 24px; font-size: 13px; color: var(--muted);
+      }
+      .info b { color: var(--text); }
+      .info code { color: var(--accent-2); font-family: ui-monospace, monospace; }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <header>
+        <div class="logo">Lua</div>
+        <div>
+          <h1>Lua Raw Host</h1>
+          <p class="sub">ฝากไฟล์ Roblox — เบราว์เซอร์เห็น decoy / Executor เห็นไฟล์จริง</p>
+        </div>
+      </header>
+
+      <div class="card">
+        <div class="row">
+          <label for="name">ชื่อไฟล์ / สคริปต์</label>
+          <input id="name" type="text" placeholder="เช่น my-hub" />
+        </div>
+
+        <div class="row">
+          <label for="code">โค้ด Lua จริง (Executor จะเห็นอันนี้)</label>
+          <textarea id="code" placeholder='print("Hello from executor")'></textarea>
+        </div>
+
+        <div class="grid2">
+          <div class="row">
+            <label for="decoy">Decoy / โค้ดหลอก (เบราว์เซอร์เห็นอันนี้)</label>
+            <textarea id="decoy" placeholder="เว้นว่างไว้เพื่อใช้ข้อความเริ่มต้น"></textarea>
+            <p class="hint">ใครเปิดลิงก์จากเบราว์เซอร์ตรง ๆ จะเห็นโค้ดนี้แทน</p>
+          </div>
+          <div class="row">
+            <label for="key">Upload Key</label>
+            <input id="key" type="password" placeholder="รหัสลับสำหรับอัปโหลด" />
+            <p class="hint">ต้องตรงกับ Environment Variable <code>UPLOAD_KEY</code></p>
+          </div>
+        </div>
+
+        <button id="submit">อัปโหลดไฟล์</button>
+
+        <div class="result" id="result">
+          <div class="row" style="margin-bottom: 12px;">
+            <label>Raw URL</label>
+            <div class="out-row">
+              <code id="rawUrl"></code>
+              <button class="copy" data-target="rawUrl">คัดลอก</button>
+            </div>
+          </div>
+          <div class="row" style="margin-bottom: 0;">
+            <label>loadstring</label>
+            <div class="out-row">
+              <code id="loadstring"></code>
+              <button class="copy" data-target="loadstring">คัดลอก</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="msg" id="msg"></div>
+      </div>
+
+      <div class="info">
+        <b>ระบบป้องกันทำงานยังไง?</b><br />
+        ตรวจ <code>User-Agent</code> ของคำขอ — ถ้ามาจาก Roblox (เช่น <code>Roblox/WinInet</code>)
+        จะส่งโค้ดจริง ส่วนเบราว์เซอร์ทั่วไปจะได้ decoy แทน<br /><br />
+        <b>วิธีเรียกใน Roblox:</b><br />
+        <code>loadstring(game:HttpGet("...ลิงก์..."))()</code>
+      </div>
+    </div>
+
+    <script>
+      const $ = (id) => document.getElementById(id);
+      const btn = $("submit");
+      const msg = $("msg");
+
+      btn.addEventListener("click", async () => {
+        const name = $("name").value.trim();
+        const code = $("code").value;
+        const decoy = $("decoy").value;
+        const key = $("key").value;
+
+        msg.textContent = "";
+        msg.className = "msg";
+
+        if (!code.trim()) {
+          msg.textContent = "กรุณาใส่โค้ด Lua จริงก่อน";
+          msg.className = "msg err";
+          return;
+        }
+
+        btn.disabled = true;
+        btn.textContent = "กำลังอัปโหลด...";
+
+        try {
+          const res = await fetch("/api/uploads", {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "x-upload-key": key },
+            body: JSON.stringify({ name, code, decoy }),
+          });
+          const data = await res.json();
+
+          if (!res.ok || !data.ok) {
+            throw new Error(data.error || "อัปโหลดไม่สำเร็จ");
+          }
+
+          $("rawUrl").textContent = data.rawUrl;
+          $("loadstring").textContent = data.loadstring;
+          $("result").classList.add("show");
+          msg.textContent = "อัปโหลดสำเร็จ!";
+          msg.className = "msg ok";
+        } catch (e) {
+          msg.textContent = "ผิดพลาด: " + e.message;
+          msg.className = "msg err";
+        } finally {
+          btn.disabled = false;
+          btn.textContent = "อัปโหลดไฟล์";
+        }
+      });
+
+      document.querySelectorAll(".copy").forEach((b) => {
+        b.addEventListener("click", async () => {
+          const text = $(b.dataset.target).textContent;
+          try {
+            await navigator.clipboard.writeText(text);
+            const old = b.textContent;
+            b.textContent = "คัดลอกแล้ว";
+            setTimeout(() => (b.textContent = old), 1200);
+          } catch {}
+        });
+      });
+    </script>
+  </body>
+</html>
