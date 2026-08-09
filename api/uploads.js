@@ -1,19 +1,5 @@
-// api/uploads.js
-// Serverless function ที่ทำหน้าที่ 2 อย่าง:
-//   POST  /api/uploads          -> อัปโหลดไฟล์ Lua ขึ้น GitHub (ต้องใส่ key)
-//   GET   /api/uploads?id=xxx    -> ดึงไฟล์ พร้อมระบบป้องกัน
-//        - ถ้าเปิดจากเบราว์เซอร์ทั่วไป  => แสดง decoy / ข้อความที่ตั้งไว้
-//        - ถ้าเรียกจาก Roblox Executor  => แสดงไฟล์จริงที่อัปโหลด
-//
-// ต้องตั้งค่า Environment Variables:
-//   GITHUB_TOKEN   -> Personal Access Token (scope: repo / contents:write)
-//   GITHUB_OWNER   -> ชื่อ user/org เจ้าของ repo
-//   GITHUB_REPO    -> ชื่อ repo ที่ใช้เก็บไฟล์
-//   GITHUB_BRANCH  -> branch (ไม่ใส่ = main)
-//   UPLOAD_KEY     -> รหัสลับสำหรับอัปโหลด (กันคนอื่นอัปโหลดมั่ว)
-
 const GITHUB_API = "https://api.github.com";
-const DATA_DIR = "data"; // โฟลเดอร์ที่เก็บ metadata ใน repo
+const DATA_DIR = "data";
 
 function env(name, fallback) {
   const v = process.env[name];
@@ -38,7 +24,6 @@ function ghHeaders(token) {
   };
 }
 
-// base64 <-> utf8 (รองรับภาษาไทย/อักขระพิเศษ)
 function toBase64(str) {
   return Buffer.from(str, "utf8").toString("base64");
 }
@@ -53,7 +38,6 @@ function randomId(len = 10) {
   return out;
 }
 
-// อ่าน body แบบยืดหยุ่น (รองรับทั้ง Vercel และ dev server)
 async function readJsonBody(req) {
   if (req.body && typeof req.body === "object") return req.body;
   const chunks = [];
@@ -82,14 +66,12 @@ function sendJson(res, status, obj) {
 
 function sendLua(res, status, text) {
   res.statusCode = status;
-  // ส่งเป็น text/plain เพื่อให้ game:HttpGet อ่านได้ตรง ๆ
   res.setHeader("Content-Type", "text/plain; charset=utf-8");
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Cache-Control", "no-store");
   res.end(text);
 }
 
-// ---------- GitHub helpers ----------
 async function ghPutFile(cfg, path, contentStr, message) {
   const url = `${GITHUB_API}/repos/${cfg.owner}/${cfg.repo}/contents/${encodeURIComponent(path)}`;
   const res = await fetch(url, {
@@ -125,25 +107,22 @@ async function ghGetRaw(cfg, path) {
   return fromBase64(json.content.replace(/\n/g, ""));
 }
 
-// ---------- Executor detection ----------
-// Roblox (ทั้งเกมและ executor ส่วนใหญ่) จะส่ง User-Agent ที่มีคำว่า "Roblox"
-// เช่น "Roblox/WinInet" ส่วนเบราว์เซอร์จะเป็น Mozilla/Chrome/Safari ฯลฯ
 function isRobloxRequest(req) {
   const ua = String(req.headers["user-agent"] || "").toLowerCase();
   if (ua.includes("roblox")) return true;
-  // เผื่อ executor บางตัวตั้ง UA เอง: อนุญาต header ลับด้วย
   if (String(req.headers["x-executor"] || "").length > 0) return true;
   return false;
 }
 
-const DEFAULT_DECOY = `-- ⛔ Access Denied
--- ไฟล์นี้ต้องรันผ่าน Roblox Executor เท่านั้น
+const DEFAULT_DECOY = `-- Access Denied
 print("Nice try :)")
 `;
 
-// ---------- Main handler ----------
+function sanitizeId(id) {
+  return String(id).replace(/[^a-zA-Z0-9]/g, "").slice(0, 32);
+}
+
 export default async function handler(req, res) {
-  // CORS preflight
   if (req.method === "OPTIONS") {
     res.statusCode = 204;
     res.setHeader("Access-Control-Allow-Origin", "*");
@@ -154,7 +133,6 @@ export default async function handler(req, res) {
 
   const cfg = ghConfig();
 
-  // ---------- GET: ดึงไฟล์ ----------
   if (req.method === "GET") {
     const q = getQuery(req);
     const id = q.id;
@@ -183,14 +161,11 @@ export default async function handler(req, res) {
     }
 
     if (isRobloxRequest(req)) {
-      // ✅ Executor -> ไฟล์จริง
       return sendLua(res, 200, meta.code || "");
     }
-    // 🌐 เบราว์เซอร์ -> decoy
     return sendLua(res, 200, meta.decoy || DEFAULT_DECOY);
   }
 
-  // ---------- POST: อัปโหลด ----------
   if (req.method === "POST") {
     if (!cfg.token || !cfg.owner || !cfg.repo) {
       return sendJson(res, 500, { error: "GitHub env not configured" });
@@ -242,8 +217,4 @@ export default async function handler(req, res) {
   }
 
   return sendJson(res, 405, { error: "method not allowed" });
-}
-
-function sanitizeId(id) {
-  return String(id).replace(/[^a-zA-Z0-9]/g, "").slice(0, 32);
 }
