@@ -12,6 +12,8 @@ function ghConfig() {
     owner: env("GITHUB_OWNER"),
     repo: env("GITHUB_REPO"),
     branch: env("GITHUB_BRANCH", "main"),
+    // ไฟล์โค้ดหลอก (decoy) ที่ใช้ร่วมกันทุกอัปโหลด อยู่ในฐานข้อมูล (repo)
+    decoyPath: env("DECOY_FILE", "code"),
   };
 }
 
@@ -107,6 +109,17 @@ async function ghGetRaw(cfg, path) {
   return fromBase64(json.content.replace(/\n/g, ""));
 }
 
+// ดึงโค้ดหลอกจากไฟล์ชื่อ "code" ในฐานข้อมูล (repo) ถ้าไม่มีให้ใช้ค่าเริ่มต้น
+async function getDecoy(cfg) {
+  try {
+    const text = await ghGetRaw(cfg, cfg.decoyPath);
+    if (text && text.length) return text;
+  } catch {
+    // ignore, fallback ด้านล่าง
+  }
+  return DEFAULT_DECOY;
+}
+
 function isRobloxRequest(req) {
   const ua = String(req.headers["user-agent"] || "").toLowerCase();
   if (ua.includes("roblox")) return true;
@@ -163,7 +176,9 @@ export default async function handler(req, res) {
     if (isRobloxRequest(req)) {
       return sendLua(res, 200, meta.code || "");
     }
-    return sendLua(res, 200, meta.decoy || DEFAULT_DECOY);
+    // เบราว์เซอร์ทั่วไป: ใช้โค้ดหลอกจากไฟล์ "code" ในฐานข้อมูลเสมอ
+    const decoy = await getDecoy(cfg);
+    return sendLua(res, 200, decoy);
   }
 
   if (req.method === "POST") {
@@ -182,7 +197,6 @@ export default async function handler(req, res) {
     const body = await readJsonBody(req);
     const name = String(body.name || "script").slice(0, 100);
     const code = typeof body.code === "string" ? body.code : "";
-    const decoy = typeof body.decoy === "string" && body.decoy.length ? body.decoy : DEFAULT_DECOY;
 
     if (!code.trim()) {
       return sendJson(res, 400, { error: "missing code" });
@@ -193,7 +207,6 @@ export default async function handler(req, res) {
       id,
       name,
       code,
-      decoy,
       createdAt: new Date().toISOString(),
     };
 
