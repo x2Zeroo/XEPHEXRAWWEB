@@ -33,11 +33,13 @@ function fromBase64(b64) {
   return Buffer.from(b64, "base64").toString("utf8");
 }
 
-function randomId(len = 10) {
-  const chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
-  let out = "";
-  for (let i = 0; i < len; i++) out += chars[Math.floor(Math.random() * chars.length)];
-  return out;
+// แปลงชื่อไฟล์ที่ผู้ใช้ตั้ง ให้กลายเป็น id ที่ใช้เป็นทั้งชื่อไฟล์ในฐานข้อมูลและส่วนหนึ่งของ URL
+function slugify(name) {
+  return String(name || "")
+    .trim()
+    .replace(/\s+/g, "-")
+    .replace(/[^a-zA-Z0-9_-]/g, "")
+    .slice(0, 64);
 }
 
 async function readJsonBody(req) {
@@ -132,7 +134,7 @@ print("Nice try :)")
 `;
 
 function sanitizeId(id) {
-  return String(id).replace(/[^a-zA-Z0-9]/g, "").slice(0, 32);
+  return String(id).replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 64);
 }
 
 export default async function handler(req, res) {
@@ -195,14 +197,34 @@ export default async function handler(req, res) {
     }
 
     const body = await readJsonBody(req);
-    const name = String(body.name || "script").slice(0, 100);
+    const name = String(body.name || "").trim().slice(0, 100);
     const code = typeof body.code === "string" ? body.code : "";
 
     if (!code.trim()) {
       return sendJson(res, 400, { error: "missing code" });
     }
+    if (!name) {
+      return sendJson(res, 400, { error: "missing name" });
+    }
 
-    const id = randomId(10);
+    const id = slugify(name);
+    if (!id) {
+      return sendJson(res, 400, {
+        error: "invalid name — ใช้ตัวอักษร a-z A-Z 0-9 _ - เท่านั้น",
+      });
+    }
+
+    // เช็คว่าชื่อนี้มีอยู่ในฐานข้อมูล (repo) แล้วหรือยัง
+    let existing;
+    try {
+      existing = await ghGetRaw(cfg, `${DATA_DIR}/${id}.json`);
+    } catch (e) {
+      return sendJson(res, 502, { error: "github error", detail: String(e.message) });
+    }
+    if (existing) {
+      return sendJson(res, 409, { error: "ชื่อนี้มีอยู่แล้ว กรุณาใช้ชื่ออื่น" });
+    }
+
     const meta = {
       id,
       name,
@@ -218,7 +240,7 @@ export default async function handler(req, res) {
 
     const host = req.headers["x-forwarded-host"] || req.headers.host || "";
     const proto = req.headers["x-forwarded-proto"] || "https";
-    const rawUrl = `${proto}://${host}/api/uploads?id=${id}`;
+    const rawUrl = `${proto}://${host}/${id}`;
 
     return sendJson(res, 200, {
       ok: true,
