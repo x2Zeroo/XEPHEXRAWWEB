@@ -477,8 +477,9 @@
         <h2 class="card-title"><span class="n">↑</span> อัปโหลดสคริปต์</h2>
 
         <div class="row">
-          <label for="name">ชื่อไฟล์ / สคริปต์ <span class="opt">(ไม่บังคับ)</span></label>
-          <input id="name" type="text" placeholder="เช่น my-hub" />
+          <label for="name">ชื่อไฟล์ / สคริปต์ <span class="opt">(ใช้เป็นลิงก์ เช่น raw.xephex.xyz/my-hub)</span></label>
+          <input id="name" type="text" placeholder="เช่น my-hub" required />
+          <p class="hint">ใช้ได้เฉพาะตัวอักษร a-z A-Z 0-9 _ - เท่านั้น ถ้าชื่อนี้มีอยู่แล้วจะแจ้งให้ใช้ชื่ออื่น</p>
         </div>
 
         <div class="row">
@@ -564,6 +565,14 @@
 
         if (!code.trim()) {
           setMsg("กรุณาใส่โค้ด Lua จริงก่อน", "err")
+          return
+        }
+        if (!name) {
+          setMsg("กรุณาตั้งชื่อไฟล์/สคริปต์ก่อน (ใช้เป็นลิงก์)", "err")
+          return
+        }
+        if (!/^[A-Za-z0-9_-]+$/.test(name)) {
+          setMsg("ชื่อไฟล์ใช้ได้เฉพาะ a-z A-Z 0-9 _ - เท่านั้น", "err")
           return
         }
 

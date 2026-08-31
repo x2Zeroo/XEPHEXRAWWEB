@@ -1,0 +1,5 @@
+{
+  "rewrites": [
+    { "source": "/:id([A-Za-z0-9_-]{1,64})", "destination": "/api/uploads?id=:id" }
+  ]
+}
